@@ -38,6 +38,13 @@
       --pos:  #39d353;
       --neg:  #f85149;
       --neu:  #58a6ff;
+
+      /* category palette */
+      --cat-ux:      #c084fc;
+      --cat-perf:    #fb923c;
+      --cat-feat:    #34d399;
+      --cat-bug:     #f87171;
+      --cat-other:   #94a3b8;
     }
 
     * { box-sizing: border-box; }
@@ -137,6 +144,22 @@
     }
     .btn-ghost:hover { color: var(--neg); border-color: var(--neg); background: rgba(248,81,73,.06); }
 
+    .btn-clear {
+      background: rgba(210,153,34,.08);
+      color: #d2a22a;
+      border: 1px solid rgba(210,153,34,.25);
+      border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      padding: 5px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all .15s;
+    }
+    .btn-clear:hover { background: rgba(210,153,34,.15); border-color: rgba(210,153,34,.4); }
+
     .btn-ai {
       background: rgba(88,166,255,.1);
       color: #58a6ff;
@@ -153,6 +176,33 @@
     }
     .btn-ai:hover { background: rgba(88,166,255,.18); border-color: rgba(88,166,255,.5); }
     .btn-ai:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* category bar rows */
+    .cat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s;
+      border: 1px solid transparent;
+    }
+    .cat-row:hover { background: rgba(255,255,255,.04); }
+    .cat-row.active { background: rgba(255,255,255,.05); border-color: var(--border-hi); }
+
+    .progress-track {
+      flex: 1;
+      height: 5px;
+      background: var(--faint);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width .45s cubic-bezier(.22,1,.36,1);
+    }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(10px); }
@@ -218,6 +268,22 @@ const SENTIMENT_STRIPE = { Positive: 'card-pos', Negative: 'card-neg', Neutral: 
 const SENTIMENT_BADGE  = { Positive: 'badge-pos', Negative: 'badge-neg', Neutral: 'badge-neu' };
 const STATUS_BADGE     = { open: 'badge-open', inprogress: 'badge-inprogress', addressed: 'badge-addressed' };
 const STATUS_LABEL     = { open: 'Open', inprogress: 'In Progress', addressed: 'Addressed' };
+
+// Category color map — hex values matching CSS vars
+const CAT_COLOR = {
+  'UX':              '#c084fc',
+  'Performance':     '#fb923c',
+  'Feature Request': '#34d399',
+  'Bug':             '#f87171',
+  'Other':           '#94a3b8',
+};
+const CAT_BG = {
+  'UX':              'rgba(192,132,252,.08)',
+  'Performance':     'rgba(251,146,60,.08)',
+  'Feature Request': 'rgba(52,211,153,.08)',
+  'Bug':             'rgba(248,113,113,.08)',
+  'Other':           'rgba(148,163,184,.08)',
+};
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -573,14 +639,91 @@ function FeedbackCard({ item, onDelete, onStatusChange }) {
   );
 }
 
+/* ─── NEW: Category Breakdown ──────────────────────────────────── */
+function CategoryBreakdown({ items, activeCategoryFilter, onCategoryClick }) {
+  const total = items.length;
+
+  return (
+    <div className="fade-up mb-6" style={{
+      background: 'var(--surface)',
+      border: '1px solid var(--border-hi)',
+      borderRadius: '10px',
+      padding: '16px 18px',
+    }}>
+      <p className="font-mono text-[10px] uppercase tracking-wider mb-3" style={{color:'var(--muted)'}}>
+        — Category Breakdown
+      </p>
+      <div className="flex flex-col gap-1">
+        {CATEGORIES.map(cat => {
+          const count = items.filter(i => i.category === cat).length;
+          const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
+          const color = CAT_COLOR[cat];
+          const isActive = activeCategoryFilter === cat;
+
+          return (
+            <div
+              key={cat}
+              className={`cat-row${isActive ? ' active' : ''}`}
+              onClick={() => onCategoryClick(cat)}
+              title={`Filter by ${cat}`}
+            >
+              {/* dot */}
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: color, flexShrink: 0,
+                boxShadow: isActive ? `0 0 6px ${color}` : 'none',
+                transition: 'box-shadow .2s',
+              }} />
+
+              {/* label */}
+              <span className="font-sans text-xs shrink-0" style={{
+                color: isActive ? color : 'var(--text)',
+                width: 112,
+                transition: 'color .15s',
+              }}>{cat}</span>
+
+              {/* bar */}
+              <div className="progress-track">
+                <div className="progress-fill" style={{
+                  width: `${pct}%`,
+                  background: color,
+                  opacity: isActive ? 1 : 0.55,
+                }} />
+              </div>
+
+              {/* pct */}
+              <span className="font-mono text-[10px] shrink-0" style={{
+                color: isActive ? color : 'var(--muted)',
+                width: 30,
+                textAlign: 'right',
+                transition: 'color .15s',
+              }}>{pct}%</span>
+
+              {/* count */}
+              <span className="font-mono text-[10px] shrink-0" style={{
+                color: isActive ? color : 'var(--muted)',
+                width: 22,
+                textAlign: 'right',
+                transition: 'color .15s',
+              }}>{count}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── MAIN TRACKER ─────────────────────────────────────────────── */
 function FeedbackTracker({ user }) {
-  const [items,      setItems]      = React.useState([]);
-  const [loading,    setLoading]    = React.useState(true);
-  const [error,      setError]      = React.useState('');
-  const [filter,     setFilter]     = React.useState('all');
-  const [aiLoading,  setAiLoading]  = React.useState(false);
-  const [aiAnalysis, setAiAnalysis] = React.useState(null);
-  const [aiError,    setAiError]    = React.useState('');
+  const [items,           setItems]           = React.useState([]);
+  const [loading,         setLoading]         = React.useState(true);
+  const [error,           setError]           = React.useState('');
+  const [sentimentFilter, setSentimentFilter] = React.useState('all');
+  const [categoryFilter,  setCategoryFilter]  = React.useState('all');
+  const [aiLoading,       setAiLoading]       = React.useState(false);
+  const [aiAnalysis,      setAiAnalysis]      = React.useState(null);
+  const [aiError,         setAiError]         = React.useState('');
 
   const errTimer = React.useRef(null);
   function showError(msg) {
@@ -641,11 +784,35 @@ function FeedbackTracker({ user }) {
 
   async function handleLogout() { await sb.auth.signOut(); }
 
-  const displayed   = filter === 'all' ? items : items.filter(i => i.sentiment === filter);
-  const pos         = items.filter(i => i.sentiment === 'Positive').length;
-  const neg         = items.filter(i => i.sentiment === 'Negative').length;
-  const neu         = items.filter(i => i.sentiment === 'Neutral').length;
-  const activeCount = items.filter(i => i.status === 'open' || i.status === 'inprogress').length;
+  function handleCategoryClick(cat) {
+    setCategoryFilter(prev => prev === cat ? 'all' : cat);
+  }
+
+  function clearFilters() {
+    setSentimentFilter('all');
+    setCategoryFilter('all');
+  }
+
+  const hasActiveFilter = sentimentFilter !== 'all' || categoryFilter !== 'all';
+
+  const displayed = items
+    .filter(i => sentimentFilter === 'all' || i.sentiment === sentimentFilter)
+    .filter(i => categoryFilter  === 'all' || i.category  === categoryFilter);
+
+  const total = items.length;
+  const pos   = items.filter(i => i.sentiment === 'Positive').length;
+  const neg   = items.filter(i => i.sentiment === 'Negative').length;
+  const neu   = items.filter(i => i.sentiment === 'Neutral').length;
+
+  const countOpen       = items.filter(i => i.status === 'open').length;
+  const countInProgress = items.filter(i => i.status === 'inprogress').length;
+  const countAddressed  = items.filter(i => i.status === 'addressed').length;
+  const activeCount     = countOpen + countInProgress;
+
+  function pct(n) {
+    if (total === 0) return '0%';
+    return Math.round((n / total) * 100) + '%';
+  }
 
   return (
     <div style={{minHeight:'100vh',maxWidth:'780px',margin:'0 auto',padding:'40px 24px 80px'}}>
@@ -658,7 +825,8 @@ function FeedbackTracker({ user }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between mb-2">
         <div>
           <h1 className="font-serif text-3xl" style={{color:'var(--text)'}}>Pulse</h1>
           <p className="font-mono text-xs mt-0.5" style={{color:'var(--muted)'}}>feedback tracker</p>
@@ -686,19 +854,61 @@ function FeedbackTracker({ user }) {
         </div>
       </div>
 
-      {!loading && items.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-8 fade-up">
+      {/* ── Status summary line ── */}
+      {!loading && total > 0 && (
+        <div className="flex items-center gap-3 mb-7 fade-up" style={{paddingLeft:'1px'}}>
           {[
-            { label: 'Positive', count: pos, color: 'var(--pos)', bg: 'rgba(57,211,83,.07)' },
-            { label: 'Negative', count: neg, color: 'var(--neg)', bg: 'rgba(248,81,73,.07)' },
-            { label: 'Neutral',  count: neu, color: 'var(--neu)', bg: 'rgba(88,166,255,.07)' },
+            { label: 'Open',        count: countOpen,       color: 'var(--muted)' },
+            { label: 'In Progress', count: countInProgress, color: '#d2a22a' },
+            { label: 'Addressed',   count: countAddressed,  color: 'var(--pos)' },
+          ].map((s, i) => (
+            <React.Fragment key={s.label}>
+              {i > 0 && <span style={{color:'var(--border-hi)',fontSize:'10px',userSelect:'none'}}>·</span>}
+              <span className="font-mono text-[10px]" style={{color:'var(--muted)'}}>
+                <span style={{color: s.color, fontWeight: 500}}>{s.count}</span>
+                {' '}{s.label}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {/* ── Sentiment stats (with %) ── */}
+      {!loading && total > 0 && (
+        <div className="grid grid-cols-3 gap-3 mb-5 fade-up">
+          {[
+            { label: 'Positive', count: pos, color: 'var(--pos)', bg: 'rgba(57,211,83,.07)', border: 'rgba(57,211,83,.18)' },
+            { label: 'Negative', count: neg, color: 'var(--neg)', bg: 'rgba(248,81,73,.07)',  border: 'rgba(248,81,73,.18)' },
+            { label: 'Neutral',  count: neu, color: 'var(--neu)', bg: 'rgba(88,166,255,.07)', border: 'rgba(88,166,255,.18)' },
           ].map(s => (
-            <div key={s.label} style={{background:s.bg,border:`1px solid ${s.color}22`,borderRadius:'8px',padding:'12px 16px'}}>
-              <p className="font-mono text-xl font-500" style={{color:s.color}}>{s.count}</p>
-              <p className="font-mono text-[10px] mt-0.5" style={{color:'var(--muted)'}}>{s.label}</p>
+            <div key={s.label} style={{
+              background: s.bg,
+              border: `1px solid ${s.border}`,
+              borderRadius: '8px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+            }}>
+              <div>
+                <p className="font-mono text-xl font-500" style={{color: s.color, lineHeight: 1}}>{s.count}</p>
+                <p className="font-mono text-[10px] mt-1" style={{color:'var(--muted)'}}>{s.label}</p>
+              </div>
+              <p className="font-mono text-lg" style={{color: s.color, opacity: 0.45, lineHeight: 1}}>
+                {pct(s.count)}
+              </p>
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── Category Breakdown ── */}
+      {!loading && total > 0 && (
+        <CategoryBreakdown
+          items={items}
+          activeCategoryFilter={categoryFilter}
+          onCategoryClick={handleCategoryClick}
+        />
       )}
 
       {aiError && (
@@ -711,17 +921,50 @@ function FeedbackTracker({ user }) {
 
       {aiAnalysis && <AIAnalysisPanel analysis={aiAnalysis} onDismiss={() => setAiAnalysis(null)} />}
 
+      {/* ── Filter row ── */}
       <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Sentiment pills */}
           {['all', ...SENTIMENTS].map(f => (
-            <button key={f} onClick={() => setFilter(f)} className={`pill${filter === f ? ' active' : ''}`}>
+            <button key={f} onClick={() => setSentimentFilter(f)} className={`pill${sentimentFilter === f && categoryFilter === 'all' && f === 'all' ? ' active' : sentimentFilter === f && f !== 'all' ? ' active' : ''}`}>
               {f === 'all' ? 'All' : f}
             </button>
           ))}
+
+          {/* Clear filter button */}
+          {hasActiveFilter && (
+            <button onClick={clearFilters} className="btn-clear fade-up">
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              Clear filter
+            </button>
+          )}
         </div>
         <FeedbackForm onAdd={handleAdd} />
       </div>
 
+      {/* ── Active filter label ── */}
+      {hasActiveFilter && (
+        <div className="mb-4 fade-up flex items-center gap-2">
+          <span className="font-mono text-[10px]" style={{color:'var(--muted)'}}>Showing:</span>
+          {sentimentFilter !== 'all' && (
+            <span className={`badge ${SENTIMENT_BADGE[sentimentFilter]}`}>{sentimentFilter}</span>
+          )}
+          {categoryFilter !== 'all' && (
+            <span className="badge" style={{
+              background: CAT_BG[categoryFilter],
+              color: CAT_COLOR[categoryFilter],
+              border: `1px solid ${CAT_COLOR[categoryFilter]}44`,
+            }}>{categoryFilter}</span>
+          )}
+          <span className="font-mono text-[10px]" style={{color:'var(--muted)'}}>
+            — {displayed.length} item{displayed.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
+
+      {/* ── Cards ── */}
       {loading ? (
         <div className="flex flex-col gap-3">
           {[1,2,3].map(n => (
@@ -734,10 +977,10 @@ function FeedbackTracker({ user }) {
       ) : displayed.length === 0 ? (
         <div className="text-center py-20 fade-up">
           <p className="font-serif text-2xl italic mb-2" style={{color:'var(--muted)'}}>
-            {filter === 'all' ? 'No feedback yet' : `No ${filter.toLowerCase()} feedback`}
+            {!hasActiveFilter ? 'No feedback yet' : 'No matching feedback'}
           </p>
           <p className="font-mono text-xs" style={{color:'var(--muted)',opacity:.6}}>
-            {filter === 'all' ? 'Add your first item above.' : 'Try a different filter.'}
+            {!hasActiveFilter ? 'Add your first item above.' : 'Try a different filter or clear the current one.'}
           </p>
         </div>
       ) : (
