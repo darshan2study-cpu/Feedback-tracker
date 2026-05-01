@@ -945,7 +945,7 @@ function FilterBar({ sentimentFilter, setSentimentFilter, statusFilter, setStatu
         {/* Clear filters — same width as a dropdown, sits directly below Sentiment */}
         {hasActiveFilter && (
           <div className="fade-up" style={{width:'130px'}}>
-            <button onClick={onClear} className="btn-clear" style={{width:'100%', justifyContent:'center'}}>
+            <button onClick={onClear} className="btn-clear" style={{width:'100%', justifyContent:'center', whiteSpace:'nowrap', fontSize:'10px'}}>
               <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
                 <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
               </svg>
