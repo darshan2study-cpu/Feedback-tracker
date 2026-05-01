@@ -114,7 +114,7 @@
     }
     textarea.ctrl { resize: vertical; min-height: 88px; }
 
-    /* filter select — compact variant */
+    /* filter select — consistent style regardless of selected value */
     .filter-select {
       background: var(--surface);
       border: 1px solid var(--border-hi);
@@ -132,10 +132,10 @@
       border-color: #58a6ff;
       box-shadow: 0 0 0 3px rgba(88,166,255,.12);
     }
+    /* When a non-default value is selected: only highlight the selected text, border stays same */
     .filter-select.active {
-      border-color: rgba(88,166,255,.5);
+      border-color: rgba(88,166,255,.45);
       color: #58a6ff;
-      background: rgba(88,166,255,.06);
     }
 
     .btn-primary {
@@ -531,22 +531,24 @@ function AuthForm() {
   );
 }
 
-/* ── FeedbackForm — now with title field ── */
+/* ── FeedbackForm — all fields mandatory ── */
 function FeedbackForm({ onAdd }) {
   const [title,     setTitle]     = React.useState('');
   const [content,   setContent]   = React.useState('');
-  const [source,    setSource]    = React.useState(SOURCES[0]);
-  const [category,  setCategory]  = React.useState(CATEGORIES[0]);
-  const [sentiment, setSentiment] = React.useState(SENTIMENTS[2]);
+  const [source,    setSource]    = React.useState('');
+  const [category,  setCategory]  = React.useState('');
+  const [sentiment, setSentiment] = React.useState('');
   const [loading,   setLoading]   = React.useState(false);
   const [open,      setOpen]      = React.useState(false);
 
+  const canSubmit = title.trim() && content.trim() && source && category && sentiment;
+
   async function submit(e) {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    if (!canSubmit) return;
     setLoading(true);
     await onAdd({ title: title.trim(), content: content.trim(), source, category, sentiment });
-    setTitle(''); setContent(''); setSource(SOURCES[0]); setCategory(CATEGORIES[0]); setSentiment(SENTIMENTS[2]);
+    setTitle(''); setContent(''); setSource(''); setCategory(''); setSentiment('');
     setLoading(false);
     setOpen(false);
   }
@@ -573,7 +575,7 @@ function FeedbackForm({ onAdd }) {
       <div className="flex flex-col gap-3">
         {/* Title */}
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>Title</label>
+          <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>Title <span style={{color:'var(--neg)'}}>*</span></label>
           <input
             type="text"
             value={title}
@@ -585,7 +587,7 @@ function FeedbackForm({ onAdd }) {
         </div>
         {/* Description */}
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>Description</label>
+          <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>Description <span style={{color:'var(--neg)'}}>*</span></label>
           <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Full details of the feedback…" className="ctrl" required />
         </div>
         <div className="grid grid-cols-3 gap-2">
@@ -595,9 +597,11 @@ function FeedbackForm({ onAdd }) {
             [sentiment, setSentiment, SENTIMENTS, 'Sentiment'],
           ].map(([val, set, opts, label]) => (
             <div key={label} className="flex flex-col gap-1">
-              <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>{label}</label>
+              <label className="font-mono text-[10px]" style={{color:'var(--muted)'}}>{label} <span style={{color:'var(--neg)'}}>*</span></label>
               <div className="relative">
-                <select value={val} onChange={e => set(e.target.value)} className="ctrl pr-8 appearance-none cursor-pointer">
+                <select value={val} onChange={e => set(e.target.value)} className="ctrl pr-8 appearance-none cursor-pointer"
+                  style={{color: val ? 'var(--text)' : 'var(--muted)'}}>
+                  <option value="" disabled>Select…</option>
                   {opts.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
                 <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -607,11 +611,16 @@ function FeedbackForm({ onAdd }) {
             </div>
           ))}
         </div>
-        <div className="flex justify-end gap-2 mt-1">
-          <button type="button" onClick={() => setOpen(false)} className="btn-ghost">Cancel</button>
-          <button type="submit" disabled={loading || !title.trim() || !content.trim()} className="btn-primary text-sm">
-            {loading ? 'Adding…' : 'Add Feedback'}
-          </button>
+        <div className="flex items-center justify-between mt-1">
+          <span className="font-mono text-[10px]" style={{color:'var(--muted)'}}>
+            <span style={{color:'var(--neg)'}}>*</span> all fields required
+          </span>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setOpen(false)} className="btn-ghost">Cancel</button>
+            <button type="submit" disabled={loading || !canSubmit} className="btn-primary text-sm">
+              {loading ? 'Adding…' : 'Add Feedback'}
+            </button>
+          </div>
         </div>
       </div>
     </form>
@@ -623,35 +632,54 @@ function FeedbackDetailModal({ item, onClose, onStatusChange, onDescriptionSave 
   const [description, setDescription] = React.useState(item.content);
   const [status,      setStatus]      = React.useState(item.status);
   const [saving,      setSaving]      = React.useState(false);
+  const [saveSuccess, setSaveSuccess] = React.useState(false);
+  const [warnUnsaved, setWarnUnsaved] = React.useState(false);
+
+  // Track what's actually persisted so we can detect dirty state
+  const savedDescription = React.useRef(item.content);
+  const savedStatus      = React.useRef(item.status);
+
+  const isDirty = description !== savedDescription.current || status !== savedStatus.current;
+
+  function attemptClose() {
+    if (isDirty) {
+      setWarnUnsaved(true);
+    } else {
+      onClose();
+    }
+  }
 
   // Close on Escape
   React.useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    function onKey(e) { if (e.key === 'Escape') attemptClose(); }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [isDirty]);
 
-  async function handleSaveDescription() {
-    if (description === item.content) return;
+  async function handleSave() {
     setSaving(true);
-    await onDescriptionSave(item.id, description);
+    if (description !== savedDescription.current) {
+      await onDescriptionSave(item.id, description);
+      savedDescription.current = description;
+    }
+    if (status !== savedStatus.current) {
+      await onStatusChange(item.id, status);
+      savedStatus.current = status;
+    }
     setSaving(false);
-  }
-
-  async function handleStatusChange(newStatus) {
-    setStatus(newStatus);
-    await onStatusChange(item.id, newStatus);
+    setSaveSuccess(true);
+    setWarnUnsaved(false);
+    setTimeout(() => setSaveSuccess(false), 2000);
   }
 
   const sentBadge = SENTIMENT_BADGE[item.sentiment] || 'badge-neu';
-  const statBadge = STATUS_BADGE[status] || 'badge-open';
   const stripe    = SENTIMENT_STRIPE[item.sentiment] || 'card-neu';
 
   return (
     <div
       className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)'}}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) attemptClose(); }}
     >
       <div className={`modal-panel w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden ${stripe}`} style={{
         background:'var(--surface)',
@@ -666,9 +694,37 @@ function FeedbackDetailModal({ item, onClose, onStatusChange, onDescriptionSave 
             </h2>
             <p className="font-mono text-[10px] mt-1.5" style={{color:'var(--muted)'}}>{fmtDate(item.createdAt)}</p>
           </div>
-          <button onClick={onClose}
-            style={{background:'none',border:'none',cursor:'pointer',color:'var(--muted)',fontSize:'20px',lineHeight:1,padding:'0 2px',flexShrink:0,marginTop:'2px'}}>×</button>
+          <button onClick={attemptClose}
+            style={{background:'none',border:'none',cursor:'pointer',color:'var(--muted)',fontSize:'20px',lineHeight:1,padding:'0 2px',flexShrink:0,marginTop:'2px'}}
+            title="Close">×</button>
         </div>
+
+        {/* Unsaved changes warning */}
+        {warnUnsaved && (
+          <div className="mx-6 mt-4 px-4 py-3 rounded-lg flex items-start justify-between gap-3 fade-up"
+            style={{background:'rgba(210,153,34,.1)',border:'1px solid rgba(210,153,34,.3)',borderRadius:'8px'}}>
+            <div className="flex items-start gap-2">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{color:'#d2a22a',flexShrink:0,marginTop:'1px'}}>
+                <path d="M8 1.5L1 13.5h14L8 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <line x1="8" y1="6.5" x2="8" y2="9.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                <circle cx="8" cy="11.5" r="0.7" fill="currentColor"/>
+              </svg>
+              <p className="font-mono text-[11px] leading-relaxed" style={{color:'#d2a22a'}}>
+                You have unsaved changes — close anyway and lose them?
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => setWarnUnsaved(false)} className="font-mono text-[10px] px-2 py-1 rounded"
+                style={{background:'transparent',border:'1px solid rgba(210,153,34,.4)',color:'#d2a22a',cursor:'pointer'}}>
+                Keep editing
+              </button>
+              <button onClick={onClose} className="font-mono text-[10px] px-2 py-1 rounded"
+                style={{background:'rgba(248,81,73,.15)',border:'1px solid rgba(248,81,73,.3)',color:'var(--neg)',cursor:'pointer'}}>
+                Discard & close
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
@@ -680,26 +736,24 @@ function FeedbackDetailModal({ item, onClose, onStatusChange, onDescriptionSave 
             <span className="badge badge-source">{item.source}</span>
           </div>
 
-          {/* Description — editable */}
+          {/* Description — edited locally, saved only on Save click */}
           <div className="flex flex-col gap-1.5">
             <label className="font-mono text-[10px] uppercase tracking-wider" style={{color:'var(--muted)'}}>Description</label>
             <textarea
               value={description}
-              onChange={e => setDescription(e.target.value)}
-              onBlur={handleSaveDescription}
+              onChange={e => { setDescription(e.target.value); setWarnUnsaved(false); }}
               rows={5}
               className="ctrl"
               placeholder="No description yet…"
             />
-            {saving && <span className="font-mono text-[10px]" style={{color:'var(--muted)'}}>saving…</span>}
           </div>
 
-          {/* Status — editable */}
+          {/* Status — edited locally, saved only on Save click */}
           <div className="flex flex-col gap-1.5">
             <label className="font-mono text-[10px] uppercase tracking-wider" style={{color:'var(--muted)'}}>Status</label>
             <div className="flex gap-2 flex-wrap">
               {STATUSES.map(s => (
-                <button key={s} onClick={() => handleStatusChange(s)}
+                <button key={s} onClick={() => { setStatus(s); setWarnUnsaved(false); }}
                   className={`badge ${STATUS_BADGE[s]}`}
                   style={{
                     cursor:'pointer',
@@ -715,20 +769,28 @@ function FeedbackDetailModal({ item, onClose, onStatusChange, onDescriptionSave 
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t flex items-center justify-end" style={{borderColor:'var(--border)'}}>
-          <button onClick={onClose} className="btn-ghost">Close</button>
+        {/* Footer — Save only, no Close button */}
+        <div className="px-6 py-4 border-t flex items-center justify-between" style={{borderColor:'var(--border)'}}>
+          <span className="font-mono text-[10px]" style={{color: isDirty ? '#d2a22a' : 'var(--muted)'}}>
+            {saving ? 'Saving…' : saveSuccess ? '✓ Saved' : isDirty ? 'Unsaved changes' : 'No changes'}
+          </span>
+          <button onClick={handleSave} disabled={saving || !isDirty}
+            className="btn-primary text-sm"
+            style={{opacity: isDirty ? 1 : 0.45, cursor: isDirty ? 'pointer' : 'not-allowed'}}>
+            {saving ? 'Saving…' : saveSuccess ? '✓ Saved' : 'Save changes'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── FeedbackCard — title only, click to open modal ── */
+/* ── FeedbackCard — title only, click to open modal, confirm before delete ── */
 function FeedbackCard({ item, onDelete, onOpenDetail }) {
-  const [deleting, setDeleting] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting,      setDeleting]      = React.useState(false);
 
-  async function handleDelete(e) {
+  async function handleDeleteConfirmed(e) {
     e.stopPropagation();
     setDeleting(true);
     await onDelete(item.id);
@@ -741,7 +803,7 @@ function FeedbackCard({ item, onDelete, onOpenDetail }) {
   return (
     <div
       className={`fade-up feedback-card-clickable ${stripe}`}
-      onClick={() => !deleting && onOpenDetail(item)}
+      onClick={() => !deleting && !confirmDelete && onOpenDetail(item)}
       style={{
         background:'var(--surface)',
         border:'1px solid var(--border)',
@@ -751,24 +813,52 @@ function FeedbackCard({ item, onDelete, onOpenDetail }) {
         transition:'opacity .2s',
       }}
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* Title only */}
-        <p className="font-sans text-sm font-500 leading-snug flex-1" style={{color:'var(--text)',wordBreak:'break-word'}}>
-          {item.title || <span style={{color:'var(--muted)',fontStyle:'italic'}}>Untitled</span>}
-        </p>
-        <button onClick={handleDelete} disabled={deleting} className="btn-ghost shrink-0 mt-0.5" title="Delete">
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-          </svg>
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5 mt-3">
-        <span className={`badge ${sentBadge}`}>{item.sentiment}</span>
-        <span className="badge badge-category">{item.category}</span>
-        <span className="badge badge-source">{item.source}</span>
-        <span className={`badge ${statBadge} ml-auto`}>{STATUS_LABEL[item.status]}</span>
-      </div>
-      <p className="font-mono text-[10px] mt-2" style={{color:'var(--muted)'}}>{fmtDate(item.createdAt)}</p>
+      {/* Delete confirmation overlay */}
+      {confirmDelete ? (
+        <div className="flex items-center justify-between gap-3" onClick={e => e.stopPropagation()}>
+          <p className="font-mono text-xs" style={{color:'var(--muted)'}}>
+            Remove this feedback permanently?
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+              className="font-mono text-[10px] px-2.5 py-1 rounded"
+              style={{background:'transparent',border:'1px solid var(--border-hi)',color:'var(--muted)',cursor:'pointer'}}>
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteConfirmed}
+              disabled={deleting}
+              className="font-mono text-[10px] px-2.5 py-1 rounded"
+              style={{background:'rgba(248,81,73,.15)',border:'1px solid rgba(248,81,73,.35)',color:'var(--neg)',cursor:'pointer'}}>
+              {deleting ? 'Removing…' : 'Yes, remove'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-sans text-sm font-500 leading-snug flex-1" style={{color:'var(--text)',wordBreak:'break-word'}}>
+              {item.title || <span style={{color:'var(--muted)',fontStyle:'italic'}}>Untitled</span>}
+            </p>
+            <button
+              onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+              className="btn-ghost shrink-0 mt-0.5"
+              title="Delete feedback">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            <span className={`badge ${sentBadge}`}>{item.sentiment}</span>
+            <span className="badge badge-category">{item.category}</span>
+            <span className="badge badge-source">{item.source}</span>
+            <span className={`badge ${statBadge} ml-auto`}>{STATUS_LABEL[item.status]}</span>
+          </div>
+          <p className="font-mono text-[10px] mt-2" style={{color:'var(--muted)'}}>{fmtDate(item.createdAt)}</p>
+        </>
+      )}
     </div>
   );
 }
@@ -812,10 +902,8 @@ function CategoryBreakdown({ items, activeCategoryFilter, onCategoryClick }) {
   );
 }
 
-/* ── FilterBar — three dropdowns ── */
+/* ── FilterBar — three dropdowns + clear on own row below ── */
 function FilterBar({ sentimentFilter, setSentimentFilter, statusFilter, setStatusFilter, sourceFilter, setSourceFilter, hasActiveFilter, onClear }) {
-  const selStyle = (active) => ({ position:'relative', display:'inline-flex', alignItems:'center' });
-
   const dropdowns = [
     {
       label: 'Sentiment',
@@ -838,30 +926,35 @@ function FilterBar({ sentimentFilter, setSentimentFilter, statusFilter, setStatu
   ];
 
   return (
-    <div className="flex items-center gap-3 flex-wrap mb-5">
-      <span className="font-mono text-[10px] uppercase tracking-wider shrink-0" style={{color:'var(--muted)'}}>Filters:</span>
-      {dropdowns.map(({ label, value, set, options }) => (
-        <div key={label} style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
-          <select
-            value={value}
-            onChange={e => set(e.target.value)}
-            className={`filter-select${value !== 'all' ? ' active' : ''}`}
-          >
-            {options.map(([val, lbl]) => <option key={val} value={val}>{val === 'all' ? label + ': All' : lbl}</option>)}
-          </select>
-          <svg className="pointer-events-none" style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)'}} width="9" height="9" viewBox="0 0 10 10" fill="none">
-            <path d="M2 3.5L5 6.5L8 3.5" stroke={value !== 'all' ? '#58a6ff' : '#7d8590'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-      ))}
-
+    <div className="flex flex-col gap-1.5 mb-5">
+      {/* Row 1: label + dropdowns */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="font-mono text-[10px] uppercase tracking-wider shrink-0" style={{color:'var(--muted)'}}>Filters:</span>
+        {dropdowns.map(({ label, value, set, options }) => (
+          <div key={label} style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
+            <select
+              value={value}
+              onChange={e => set(e.target.value)}
+              className={`filter-select${value !== 'all' ? ' active' : ''}`}
+            >
+              {options.map(([val, lbl]) => <option key={val} value={val}>{val === 'all' ? label + ': All' : lbl}</option>)}
+            </select>
+            <svg className="pointer-events-none" style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)'}} width="9" height="9" viewBox="0 0 10 10" fill="none">
+              <path d="M2 3.5L5 6.5L8 3.5" stroke={value !== 'all' ? '#58a6ff' : '#7d8590'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        ))}
+      </div>
+      {/* Row 2: clear button on its own line, indented under dropdowns */}
       {hasActiveFilter && (
-        <button onClick={onClear} className="btn-clear fade-up">
-          <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-            <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          Clear filters
-        </button>
+        <div style={{paddingLeft:'46px'}} className="fade-up">
+          <button onClick={onClear} className="btn-clear">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+              <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            Clear filters
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1073,16 +1166,20 @@ function FeedbackTracker({ user }) {
 
       {aiAnalysis && <AIAnalysisPanel analysis={aiAnalysis} onDismiss={() => setAiAnalysis(null)} />}
 
-      {/* Filter row + Add button */}
-      <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">
-        <FilterBar
-          sentimentFilter={sentimentFilter} setSentimentFilter={setSentimentFilter}
-          statusFilter={statusFilter}       setStatusFilter={setStatusFilter}
-          sourceFilter={sourceFilter}       setSourceFilter={setSourceFilter}
-          hasActiveFilter={hasActiveFilter}
-          onClear={clearFilters}
-        />
-        <FeedbackForm onAdd={handleAdd} />
+      {/* Filter row + Add button — Add is pinned top-right, never shifts */}
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <div className="flex-1 min-w-0">
+          <FilterBar
+            sentimentFilter={sentimentFilter} setSentimentFilter={setSentimentFilter}
+            statusFilter={statusFilter}       setStatusFilter={setStatusFilter}
+            sourceFilter={sourceFilter}       setSourceFilter={setSourceFilter}
+            hasActiveFilter={hasActiveFilter}
+            onClear={clearFilters}
+          />
+        </div>
+        <div className="shrink-0 pt-0.5">
+          <FeedbackForm onAdd={handleAdd} />
+        </div>
       </div>
 
       {/* Active filter label */}
