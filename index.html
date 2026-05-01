@@ -114,7 +114,7 @@
     }
     textarea.ctrl { resize: vertical; min-height: 88px; }
 
-    /* filter select — consistent style regardless of selected value */
+    /* filter select — identical appearance regardless of selected value */
     .filter-select {
       background: var(--surface);
       border: 1px solid var(--border-hi);
@@ -132,10 +132,16 @@
       border-color: #58a6ff;
       box-shadow: 0 0 0 3px rgba(88,166,255,.12);
     }
-    /* When a non-default value is selected: only highlight the selected text, border stays same */
+    /* Active: border + text of the closed button turn blue */
     .filter-select.active {
-      border-color: rgba(88,166,255,.45);
+      border-color: rgba(88,166,255,.55);
       color: #58a6ff;
+    }
+    /* Options must always be white — they must NOT inherit the blue from .active */
+    .filter-select option,
+    .filter-select.active option {
+      color: #e6edf3;
+      background: #1c2333;
     }
 
     .btn-primary {
@@ -902,52 +908,38 @@ function CategoryBreakdown({ items, activeCategoryFilter, onCategoryClick }) {
   );
 }
 
-/* ── FilterBar — three dropdowns + clear on own row below ── */
+/* ── FilterBar — three dropdowns; clear sits below Sentiment ── */
 function FilterBar({ sentimentFilter, setSentimentFilter, statusFilter, setStatusFilter, sourceFilter, setSourceFilter, hasActiveFilter, onClear }) {
   const dropdowns = [
-    {
-      label: 'Sentiment',
-      value: sentimentFilter,
-      set: setSentimentFilter,
-      options: [['all','All'], ...SENTIMENTS.map(s => [s, s])],
-    },
-    {
-      label: 'Status',
-      value: statusFilter,
-      set: setStatusFilter,
-      options: [['all','All'], ...STATUSES.map(s => [s, STATUS_LABEL[s]])],
-    },
-    {
-      label: 'Source',
-      value: sourceFilter,
-      set: setSourceFilter,
-      options: [['all','All'], ...SOURCES.map(s => [s, s])],
-    },
+    { key:'sentiment', label:'Sentiment', value:sentimentFilter, set:setSentimentFilter, options:[['all','Sentiment: All'], ...SENTIMENTS.map(s=>[s,s])] },
+    { key:'status',    label:'Status',    value:statusFilter,    set:setStatusFilter,    options:[['all','Status: All'],    ...STATUSES.map(s=>[s,STATUS_LABEL[s]])] },
+    { key:'source',    label:'Source',    value:sourceFilter,    set:setSourceFilter,    options:[['all','Source: All'],    ...SOURCES.map(s=>[s,s])] },
   ];
 
   return (
-    <div className="flex flex-col gap-1.5 mb-5">
-      {/* Row 1: label + dropdowns */}
+    <div className="mb-5">
+      {/* Dropdowns row */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="font-mono text-[10px] uppercase tracking-wider shrink-0" style={{color:'var(--muted)'}}>Filters:</span>
-        {dropdowns.map(({ label, value, set, options }) => (
-          <div key={label} style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
+        {dropdowns.map(({ key, label, value, set, options }) => (
+          <div key={key} style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
             <select
               value={value}
               onChange={e => set(e.target.value)}
               className={`filter-select${value !== 'all' ? ' active' : ''}`}
             >
-              {options.map(([val, lbl]) => <option key={val} value={val}>{val === 'all' ? label + ': All' : lbl}</option>)}
+              {options.map(([val, lbl]) => <option key={val} value={val}>{lbl}</option>)}
             </select>
+            {/* caret always same muted color — never blue */}
             <svg className="pointer-events-none" style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)'}} width="9" height="9" viewBox="0 0 10 10" fill="none">
-              <path d="M2 3.5L5 6.5L8 3.5" stroke={value !== 'all' ? '#58a6ff' : '#7d8590'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 3.5L5 6.5L8 3.5" stroke="#7d8590" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
         ))}
       </div>
-      {/* Row 2: clear button on its own line, indented under dropdowns */}
+      {/* Clear filters: sits directly below "Filters:" label on its own row */}
       {hasActiveFilter && (
-        <div style={{paddingLeft:'46px'}} className="fade-up">
+        <div className="flex fade-up" style={{marginTop:'7px'}}>
           <button onClick={onClear} className="btn-clear">
             <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
               <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
